@@ -18,6 +18,9 @@ class SudokuSolver {
 
   insert(puzzleString, row, column, value) {
     const puzzle = this.format(puzzleString);
+    if (!puzzle[row]) return { error: "Invalid coordinate" };
+    if (!puzzle[row][column - 1]) return { error: "Invalid coordinate" };
+    if (!/^[1-9]$/.test(value)) return { error: "Invalid value" };
     puzzle[row][column - 1] = value;
     const result = this.stringify(puzzle);
     const badColPlacement = this.checkColPlacement(puzzle);
@@ -40,6 +43,7 @@ class SudokuSolver {
   }
 
   validate(puzzleString) {
+    if (!puzzleString) return { error: "Required field missing" };
     const notValidCharacters = puzzleString.split("").find((element) => {
         return !/^[1-9.]$/.test(element);
       }),
@@ -76,6 +80,8 @@ class SudokuSolver {
     const status = this.validate(puzzleString);
     if (status === true) {
       const { puzzle, error } = this.insert(puzzleString, row, column, value);
+      if (error === "Invalid coordinate" || error === "Invalid value")
+        return { error };
       let counter = 0;
       const regions = [];
       puzzle.match(/.{3}/g).forEach((element, i) => {
@@ -148,13 +154,62 @@ class SudokuSolver {
     return solved;
   }
 
+  nextEmptySpot(puzzle) {
+    for (let row in puzzle) {
+      for (let col = 0; col < puzzle[row].length; col++) {
+        if (puzzle[row][col] === ".") {
+          return { row, col };
+        }
+      }
+    }
+    return { row: -1, col: -1 };
+  }
+
+  simpleApproach(puzzle) {
+    let emptySpot = this.nextEmptySpot(puzzle);
+    let puzzleString = this.stringify(puzzle);
+    let { row } = emptySpot;
+    let { col } = emptySpot;
+
+    // there is no more empty spots
+    if (row === -1) {
+      return puzzle;
+    }
+
+    for (let num = 1; num <= 9; num++) {
+      if (
+        this.checkRegionPlacement(puzzleString, row, `${col + 1}`, `${num}`) ===
+          true &&
+        this.solved(puzzle)
+      ) {
+        return puzzle;
+      }
+      if (
+        this.checkRegionPlacement(puzzleString, row, `${col + 1}`, `${num}`) ===
+        true
+      ) {
+        puzzle[row][col] = `${num}`;
+        this.simpleApproach(puzzle);
+      }
+    }
+
+    if (this.nextEmptySpot(puzzle).row !== -1) puzzle[row][col] = ".";
+
+    return puzzle;
+  }
+
   solve(puzzleString) {
     const status = this.validate(puzzleString);
     if (status === true) {
-      console.log(puzzleString);
       const { currentString, error } = this.fillOnePossibility(puzzleString);
-      console.log(currentString);
+      const puzzle = this.format(currentString);
       if (error) {
+        if (error.error === "Too many possibilities") {
+          const isSolved = this.solved(this.simpleApproach(puzzle));
+          if (isSolved)
+            return { solution: this.stringify(this.simpleApproach(puzzle)) };
+          else return { error: "Puzzle cannot be solved" };
+        }
         return error;
       }
       return { solution: currentString };
